@@ -176,6 +176,7 @@ if [ -d "${SECRETS_KUBERNETES_DIR}" ] ; then
 
     # Check the API access that will be needed in the TERM signal handler
     podResponse=$(k8sCurlGet api/v1/namespaces/${DOCKER_VERNEMQ_KUBERNETES_NAMESPACE}/pods/$(hostname) )
+    podIndex=$(echo ${podResponse} | jq -r '.metadata.labels["apps.kubernetes.io/pod-index"]')
     statefulSetName=$(echo ${podResponse} | jq -r '.metadata.ownerReferences[0].name')
     statefulSetPath="apis/apps/v1/namespaces/${DOCKER_VERNEMQ_KUBERNETES_NAMESPACE}/statefulsets/${statefulSetName}"
     statefulSetResponse=$(k8sCurlGet ${statefulSetPath} )
@@ -325,8 +326,19 @@ sigterm_handler() {
                 terminating_node_name=VerneMQ@$IP_ADDRESS
             fi
             echo "SigTerm received from Kubernetes."
-            echo "Stopping VerneMQ node $terminating_node_name."
-            /vernemq/bin/vmq-admin node stop >/dev/null
+            # On intended scaledown done, leave the cluster gracefully, otherwise just stop the node
+            # Last pod will not leave the cluster, but just stop the node
+            desiredReplicas=$(k8sCurlGet ${statefulSetPath} | jq '.spec.replicas')
+            if [ $desiredReplicas -eq 0 ]; then
+              echo "Stopping last VerneMQ node $terminating_node_name."
+              /vernemq/bin/vmq-admin node stop >/dev/null
+            elif [ $podIndex -ge $desiredReplicas ]; then
+              echo "Leaving VerneMQ node $terminating_node_name from the cluster."
+              /vernemq/bin/vmq-admin cluster leave node=${terminating_node_name} -k && rm -rf /vernemq/data/*
+            else
+              echo "Stopping VerneMQ node $terminating_node_name."
+              /vernemq/bin/vmq-admin node stop >/dev/null
+            fi
         else
             if [ -n "$DOCKER_VERNEMQ_SWARM" ]; then
                 terminating_node_name=VerneMQ@$(hostname -i)
