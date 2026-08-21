@@ -329,7 +329,7 @@ sigterm_handler() {
             # On intended scaledown done, leave the cluster gracefully, otherwise just stop the node
             # Last pod will not leave the cluster, but just stop the node
             desiredReplicas=$(k8sCurlGet ${statefulSetPath} | jq '.spec.replicas')
-            if [ $desiredReplicas -eq 0 ]; then
+            if [ $podIndex -eq 0 ]; then
               echo "Stopping last VerneMQ node $terminating_node_name."
               /vernemq/bin/vmq-admin node stop >/dev/null
             elif [ $podIndex -ge $desiredReplicas ]; then
