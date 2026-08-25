@@ -326,19 +326,14 @@ sigterm_handler() {
                 terminating_node_name=VerneMQ@$IP_ADDRESS
             fi
             echo "SigTerm received from Kubernetes."
-            # On intended scaledown done, leave the cluster gracefully, otherwise just stop the node
-            # Last pod will not leave the cluster, but just stop the node
-            desiredReplicas=$(k8sCurlGet ${statefulSetPath} | jq '.spec.replicas')
-            if [ $podIndex -eq 0 ]; then
-              echo "Stopping last VerneMQ node $terminating_node_name."
-              /vernemq/bin/vmq-admin node stop >/dev/null
-            elif [ $podIndex -ge $desiredReplicas ]; then
-              echo "Leaving VerneMQ node $terminating_node_name from the cluster."
-              /vernemq/bin/vmq-admin cluster leave node=${terminating_node_name} -k && rm -rf /vernemq/data/*
-            else
-              echo "Stopping VerneMQ node $terminating_node_name."
-              /vernemq/bin/vmq-admin node stop >/dev/null
+            # Core poole size or default of 1 (last node) to determine if we should leave the cluster or not
+            corePoolSize = DOCKER_VERNEMQ_KUBERNETES_CORE_CLUSTER_SIZE:1
+            if [$podIndex > $corePoolSize ]; then
+               echo "Leaving VerneMQ node $terminating_node_name from the cluster."
+               /vernemq/bin/vmq-admin cluster leave node=${terminating_node_name} -k && rm -rf /vernemq/data/*
             fi
+            echo "Stopping VerneMQ node $terminating_node_name."
+            /vernemq/bin/vmq-admin node stop >/dev/null
         else
             if [ -n "$DOCKER_VERNEMQ_SWARM" ]; then
                 terminating_node_name=VerneMQ@$(hostname -i)
