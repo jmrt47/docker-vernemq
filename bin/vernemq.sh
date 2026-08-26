@@ -327,7 +327,7 @@ sigterm_handler() {
             fi
             echo "SigTerm received from Kubernetes."
             # Core poole size or default of 1 (last node) to determine if we should leave the cluster or not
-            corePoolSize = DOCKER_VERNEMQ_KUBERNETES_CORE_CLUSTER_SIZE:1
+            corePoolSize="${DOCKER_VERNEMQ_KUBERNETES_CORE_CLUSTER_SIZE:-1}"
             if [$podIndex > $corePoolSize ]; then
                echo "Leaving VerneMQ node $terminating_node_name from the cluster."
                /vernemq/bin/vmq-admin cluster leave node=${terminating_node_name} -k && rm -rf /vernemq/data/*
